@@ -1,0 +1,159 @@
+---
+title: "R Notebook"
+Author: "Joseph Adams"
+Date: "1/15/2023"
+output: 
+  word_document: default
+  pdf_document: default
+---
+
+```{r}
+# Introduction: What are the most important defensive metrics that can predict a team's number of wins throughout a season? Are these metrics equally as successful in predicting postseason success? It's a common belief that defense wins championships, but this paper will specifically investigate which defensive metrics are the most essential to team performance. As such, only defensive statistics will be included in the analysis. The metrics to be studied include ADJDE (Adjusted Defensive Efficiency),EFG_D (Effective Field Goal Percentage Allowed), TOR_D (Turnover Percentage Committed (Steal Rate)), DRB (Offensive Rebound Rate Allowed), FTRD (Free Throw Rate Allowed), 2P_D (Two-Point Shooting Percentage Allowed), and 3P_D (Three-Point Shooting Percentage Allowed). This dataset is pulled from Kaggle and was compiled by Andrew Sunberg. It contains D1 basketball information from the 2013-2021 seasons.
+```
+
+```{r}
+library(readr)
+library(MASS)
+library(dplyr)
+library(leaps)
+library(car)
+cbb <- read_csv("cbb.csv")
+cbb
+```
+
+```{r}
+# Column names must be altered because numbers can't be used in a column name. 
+colnames(cbb)[17] <- "Two_PD"
+colnames(cbb)[19] <- "Three_PD"
+cbb_reordered <- cbb %>% relocate(W)
+cbb_reordered
+```
+
+
+```{r}
+# Creation of model predicting wins using defensive metrics
+model = lm(W ~ ADJDE + EFG_D + TORD + DRB + FTRD + Two_PD + Three_PD,  data = cbb_reordered)
+summary(model)
+```
+
+```{r}
+# As seen above, every variable used in the dataset is a statistically significant predictor in the number of wins a team gains except for 2 and 3 point shooting percentage allowed. To help determine the most important predictors of those that are significant, a backward selection process will be used. 
+```
+
+```{r}
+plot(model)
+```
+```{r}
+# Looking at the plot of the residuals, it's clear that this combination of defensive predictors is quite successful in predicting the number of games a team wins throughout a season. The goal is to have as few predictors as possible without compromising the success of the model. Further analysis will determine if we can simplify this model. 
+```
+
+```{r}
+# Backward Selection 
+full_model = lm(W~., data=cbb_reordered)
+MSE = (summary(full_model)$sigma)^2
+
+model2 = step(full_model, scale=MSE, trace=FALSE)
+summary(model2)
+```
+
+```{r}
+# The defensive metrics chosen according to the backwards selection process are ADJDE, EFG_D, TORD, DRB, and FTRD. Using regsubsets we will choose the top 3 most significant predictors among these and see what the residuals look like. 
+```
+
+```{r}
+# regsubsets can only take a few predictors
+```
+
+
+```{r}
+all = regsubsets(W ~ ADJDE + EFG_D + TORD + DRB + FTRD, data=cbb_reordered)
+summary(all)
+```
+
+```{r}
+# According to regsubsets, Adjusted Defensive Efficiency is the most important predictor of wins among defensive metrics. Trailing in second is Free Throw Rate Allowed, followed by the Offensive Rebound Rate Allowed. Seeing that these are the three most important defensive metrics for win rate, let's examine the residuals. 
+```
+
+```{r}
+topthreemodel = lm(W ~ ADJDE + FTRD + DRB, data = cbb_reordered)
+plot(topthreemodel)
+```
+
+```{r}
+# Yet again, the residuals are mostly centered at a zero mean, albeit with a slight curve at either end. Additionally, the QQ-line plot looks linear, implying that there is no skew in the residuals. 
+hist(topthreemodel$residuals)
+# Looking at a histogram of the residuals shows they are still normally distributed. This implies that these three predictors are a solid replacement for the seven or so variables originally used to predict wins. Now we turn to see if these variables are equally as successful in predicting post season success.
+```
+
+```{r}
+cbb_reordered
+```
+```{r}
+# The average adjusted defensive efficiency, free throw rate allowed, and offensive rebounding rate allowed of teams qualifying for the postseason will be compared with those team that reach the Final Four to see if there are still meaningful differences in each number. 
+```
+
+```{r}
+# Filter out teams that didn't make the tournament
+
+cbb_postseason <- cbb_reordered %>% drop_na(POSTSEASON)
+cbb_E8_or_better = subset(cbb_reordered, POSTSEASON == "Champions" | POSTSEASON == "F4" | POSTSEASON == "E8")
+```
+
+```{r}
+# Find average defensive efficiency of final four teams and compare to histogram of all postseason teams
+postseason_average_DE = sum(cbb_postseason$ADJDE) / nrow(cbb_postseason)
+E8_or_better_average_DE = sum(cbb_E8_or_better$ADJDE) / nrow(cbb_E8_or_better)
+E8_or_better_average_DE
+```
+
+
+```{r}
+hist(cbb_postseason$ADJDE)
+abline(v=E8_or_better_average_DE, col='red', lw=2)
+abline(v=postseason_average_DE, col='blue', lw=2)
+```
+```{r}
+# As shown above, the teams that made the Elite Eight had a lower average defensive efficiency than teams that simply made the postseason. This implies that teams with a stronger defensive efficiency tended to make it farther in the postseason. This provides support that defensive efficiency continues to be a predictor of success outside of the regular season. It should be noted that a significance test would still need to be completed to determine if these results were simply down to chance or not. It does however provide a positive indication for the reliability of defensive efficiency for use in predicting postseason results.
+```
+
+```{r}
+postseason_average_FTRD = sum(cbb_postseason$FTRD) / nrow(cbb_postseason)
+E8_or_better_average_FTRD = sum(cbb_E8_or_better$FTRD) / nrow(cbb_E8_or_better)
+E8_or_better_average_FTRD
+```
+
+```{r}
+hist(cbb_postseason$FTRD)
+abline(v=postseason_average_FTRD, col='blue', lw=2)
+abline(v=E8_or_better_average_FTRD, col='red', lw=2)
+```
+
+```{r}
+# Yet again the mean free throw rate is lower among teams that progressed farther in the postseason. This implies that free throw rate is a solid predictor in both the regular and the postseason. A significance test would still be required to ensure the reproducibility of these results.
+```
+
+
+```{r}
+postseason_average_DRB = sum(cbb_postseason$DRB) / nrow(cbb_postseason)
+E8_or_better_average_DRB = sum(cbb_E8_or_better$DRB) / nrow(cbb_E8_or_better)
+E8_or_better_average_DRB
+```
+
+```{r}
+hist(cbb_postseason$DRB)
+abline(v=postseason_average_DRB, col='blue', lw=2)
+abline(v=E8_or_better_average_DRB, col='red', lw=2)
+```
+
+```{r}
+# The offensive rebound rate allowed is slightly higher among teams that progressed further in the postseason. This is a surprising result, considering one would expect that teams that are successful in March would allow few offensive rebounds. This implies that the offensive rebounding rate allowed is more equipped to measure regular season performance than postseason results. 
+```
+
+```{r}
+# Conclusion: After a detailed analysis of the defensive metrics in D1 college basketball, there are three statistically significant metrics that stand out for predicting win rate in the regular season. These include the adjusted defensive efficiency, free throw rate allowed, and the offensive rebounding rate allowed. The linearity and normality of the residuals imply a strong relationship. The ability of these metrics was consistent into the postseason for adjusted defensive efficiency and free throw rate allowed. However, the offensive rebound rate allowed didn't seem to have a measurable impact on postseason success. Overall, at the very least a team's adjusted defensive efficiency and free throw rate allowed are a successful predictor of win rate in both the regular season and the postseason. The success of the adjusted defensive in particular bodes well for the continued use of KenPom ratings in the future to gauge the quality of a team. 
+```
+
+
+
+
+
